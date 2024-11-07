@@ -6,9 +6,15 @@ type Props = {
   filter: string;
   setFilter: (status: FilterStatus) => void;
   todos: Todo[];
+  handleClearComplete: () => void;
 };
 
-export const Footer: React.FC<Props> = ({ filter, setFilter, todos }) => {
+export const Footer: React.FC<Props> = ({
+  filter,
+  setFilter,
+  todos,
+  handleClearComplete,
+}) => {
   const activeTodosFiltered = todos.filter((todo: Todo) => !todo.completed);
   const completedTodosFiltered = todos.filter((todo: Todo) => todo.completed);
 
@@ -17,8 +23,6 @@ export const Footer: React.FC<Props> = ({ filter, setFilter, todos }) => {
       <span className="todo-count" data-cy="TodosCounter">
         {`${activeTodosFiltered.length} ${activeTodosFiltered.length === 1 ? 'item' : 'items'} left`}
       </span>
-
-      {/* Active link should have the 'selected' class */}
       <nav className="filter" data-cy="Filter">
         {Object.values(FilterStatus).map((status: FilterStatus) => (
           <a
@@ -34,13 +38,12 @@ export const Footer: React.FC<Props> = ({ filter, setFilter, todos }) => {
           </a>
         ))}
       </nav>
-
-      {/* this button should be disabled if there are no completed todos */}
       <button
         type="button"
         className="todoapp__clear-completed"
         data-cy="ClearCompletedButton"
         disabled={!completedTodosFiltered.length}
+        onClick={handleClearComplete}
       >
         Clear completed
       </button>

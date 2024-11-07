@@ -1,29 +1,29 @@
-/* eslint-disable jsx-a11y/label-has-associated-control */
-/* eslint-disable jsx-a11y/control-has-associated-label */
 import React, { useCallback, useEffect, useState } from 'react';
 import { Todo } from './types/Todo';
 import { FilterStatus } from './types/FilterStatus';
 import { Header } from './components/Header/Header';
 import { TodoList } from './components/TodoList/TodoList';
 import { Footer } from './components/Footer/Footer';
-import { createTodo, getTodos, USER_ID } from './api/todos';
-import { ErrorNotification } from './types/ErrorNotification';
+import { createTodo, deleteTodo, getTodos, USER_ID } from './api/todos';
 import classNames from 'classnames';
+import { ErrorNotification } from './types/ErrorNotification';
 
 export const App: React.FC = () => {
   const [todos, setTodos] = useState<Todo[]>([]);
+  const [tempTodo, setTempTodo] = useState<Todo | null>(null);
   const [filteredTodos, setFilteredTodos] = useState<Todo[]>([]);
   const [filter, setFilter] = useState<FilterStatus>(FilterStatus.All);
-  const [errorMessage, setErrorMessage] = useState<ErrorNotification | null>(
-    null,
-  );
+  const [errorMessage, setErrorMessage] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [title, setTitle] = useState('');
+  const [deletedTodoId, setDeletedTodoId] = useState<number | null>(null);
 
   useEffect(() => {
     getTodos()
       .then(setTodos)
       .catch(() => {
         setErrorMessage(ErrorNotification.loadingError);
-        setTimeout(() => setErrorMessage(null), 3000);
+        setTimeout(() => setErrorMessage(''), 3000);
       });
   }, []);
 
@@ -48,41 +48,94 @@ export const App: React.FC = () => {
     filterTodosByStatus();
   }, [todos, filter, filterTodosByStatus]);
 
-  const showErrorMessage = (message: ErrorNotification) => {
-    setErrorMessage(message);
-    setTimeout(() => setErrorMessage(null), 3000);
-  };
-
-  const handleAddTodo = (title: string) => {
-    setErrorMessage(null);
-
-    const trimmedTitle = title.trim();
-
-    if (!trimmedTitle.length) {
-      showErrorMessage(ErrorNotification.titleError);
-
-      return Promise.reject('Title should not be empty');
-    }
-
-    const newTodo = {
-      title: trimmedTitle,
+  const createTempTodo = (tempTitle: string): Todo => {
+    return {
+      title: tempTitle,
       userId: USER_ID,
       completed: false,
       id: 0,
     };
+  };
 
-    return createTodo(newTodo)
-      .then(newTodoResponse => {
-        setTodos(prevTodos => [...prevTodos, newTodoResponse]);
+  const handleAddTodo = (newTitle: string) => {
+    const trimmedTitle = newTitle.trim();
+
+    setTempTodo(createTempTodo(newTitle));
+    setLoading(true);
+
+    if (trimmedTitle) {
+      createTodo(trimmedTitle)
+        .then(newTodoResponse => {
+          setTodos(prevTodos => [...prevTodos, newTodoResponse]);
+          setTempTodo(null);
+          setTitle('');
+        })
+        .catch(() => {
+          setErrorMessage(ErrorNotification.addError);
+          setTimeout(() => setErrorMessage(''), 3000);
+        })
+        .finally(() => {
+          setTempTodo(null);
+          setLoading(false);
+        });
+    } else {
+      setTempTodo(null);
+      setLoading(false);
+      setErrorMessage(ErrorNotification.titleError);
+      setTimeout(() => setErrorMessage(''), 3000);
+    }
+  };
+
+  const deleteSelectedTodo = (todoId: number): Promise<void> => {
+    setDeletedTodoId(todoId);
+
+    return deleteTodo(todoId)
+      .then(() => {
+        setTodos((currentTodos: Todo[]) =>
+          currentTodos.filter((todo: Todo) => todo.id !== todoId),
+        );
       })
-      .catch(error => {
-        showErrorMessage(ErrorNotification.addError);
-        throw new Error(error);
+      .catch(() => {
+        setTodos(todos);
+        setErrorMessage(ErrorNotification.deleteError);
+        setTimeout(() => setErrorMessage(''), 3000);
+      })
+      .finally(() => {
+        setDeletedTodoId(null);
       });
   };
 
-  const allTodosCompleted =
-    todos.length > 0 && todos.every(todo => todo.completed);
+  const handleClearComplete = () => {
+    const completedTodos = todos.filter((todo: Todo) => todo.completed);
+
+    const deletePromises = completedTodos.map((completedTodo: Todo) => {
+      return deleteTodo(completedTodo.id);
+    });
+
+    Promise.allSettled(deletePromises)
+      .then(results => {
+        const successfulDeletes = completedTodos.filter(
+          (_, index) => results[index].status === 'fulfilled',
+        );
+
+        setTodos(currentTodos =>
+          currentTodos.filter(
+            (todo: Todo) => !successfulDeletes.includes(todo),
+          ),
+        );
+
+        const errorResponse = results.find(
+          result => result.status === 'rejected',
+        );
+
+        if (errorResponse) {
+          setErrorMessage(ErrorNotification.deleteError);
+        }
+      })
+      .catch(() => {
+        setErrorMessage(ErrorNotification.deleteError);
+      });
+  };
 
   return (
     <div className="todoapp">
@@ -90,21 +143,37 @@ export const App: React.FC = () => {
 
       <div className="todoapp__content">
         <Header
-          onSubmit={handleAddTodo}
-          allTodosCompleted={allTodosCompleted}
+          addTodo={handleAddTodo}
+          title={title}
+          setTitle={setTitle}
+          todos={todos}
+          errorMessage={errorMessage}
+          isLoading={loading}
         />
 
-        <TodoList todos={filteredTodos} />
+        <TodoList
+          todos={filteredTodos}
+          deleteSelectTodo={deleteSelectedTodo}
+          deletedTodoId={deletedTodoId}
+          tempTodo={tempTodo}
+        />
 
-        {todos.length > 0 && (
-          <Footer filter={filter} setFilter={setFilter} todos={todos} />
+        {!!todos.length && (
+          <Footer
+            setFilter={setFilter}
+            filter={filter}
+            todos={todos}
+            handleClearComplete={handleClearComplete}
+          />
         )}
       </div>
-
       <div
         data-cy="ErrorNotification"
         className={classNames(
-          'notification is-danger is-light has-text-weight-normal',
+          'notification',
+          'is-danger',
+          'is-light',
+          'has-text-weight-normal',
           { hidden: !errorMessage },
         )}
       >
@@ -112,7 +181,7 @@ export const App: React.FC = () => {
           data-cy="HideErrorButton"
           type="button"
           className="delete"
-          onClick={() => setErrorMessage(null)}
+          onClick={() => setErrorMessage('')}
         />
         {errorMessage}
       </div>

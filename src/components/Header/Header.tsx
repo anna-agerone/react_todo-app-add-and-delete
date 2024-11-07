@@ -1,49 +1,55 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useEffect, useRef } from 'react';
 import classNames from 'classnames';
+import { Todo } from '../../types/Todo';
 
 type Props = {
-  onSubmit: (title: string) => void;
-  allTodosCompleted: boolean;
+  addTodo: (title: string) => void;
+  title: string;
+  setTitle: (value: string) => void;
+  todos: Todo[];
+  errorMessage: string;
+  isLoading: boolean;
 };
 
-export const Header: React.FC<Props> = ({ onSubmit, allTodosCompleted }) => {
-  const [newTodoTitle, setNewTodoTitle] = useState('');
+export const Header: React.FC<Props> = ({
+  addTodo,
+  title,
+  setTitle,
+  todos,
+  errorMessage,
+  isLoading,
+}) => {
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    inputRef.current?.focus();
-  }, []);
-
-  const handleFormSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-
-    if (!newTodoTitle.trim()) {
-      return;
+    if (inputRef.current) {
+      inputRef.current.focus();
     }
+  }, [isLoading, errorMessage, todos]);
 
-    onSubmit(newTodoTitle.trim());
-    setNewTodoTitle('');
+  const handleTitleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    addTodo(title);
   };
 
   return (
     <header className="todoapp__header">
       <button
         type="button"
-        className={classNames('todoapp__toggle-all', {
-          active: allTodosCompleted,
-        })}
+        className={classNames('todoapp__toggle-all', { active: false })}
         data-cy="ToggleAllButton"
       />
 
-      <form onSubmit={handleFormSubmit}>
+      <form onSubmit={handleTitleSubmit}>
         <input
           ref={inputRef}
           data-cy="NewTodoField"
           type="text"
           className="todoapp__new-todo"
+          value={title}
           placeholder="What needs to be done?"
-          value={newTodoTitle}
-          onChange={e => setNewTodoTitle(e.target.value)}
+          onChange={e => setTitle(e.target.value)}
+          disabled={isLoading}
         />
       </form>
     </header>
